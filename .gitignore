@@ -1,0 +1,5 @@
+# Firmware build outputs (produced by the imagebuilder Docker run)
+/bin/
+/custom/
+*.img.gz
+*.img
