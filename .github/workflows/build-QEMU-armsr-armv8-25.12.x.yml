@@ -1,5 +1,9 @@
 name: Build 25.12.x QEMU-armsr-armv8
-# 你可以理解为这是一种ARM64平台下通用型OpenWrt ,产出格式为qcow2,适合所有ARM64平台的虚拟机
+# 你可以理解为这是一种ARM64平台下通用型OpenWrt
+# 产出与官方 ImmortalWrt armsr/armv8 相同的组合镜像:
+#   squashfs-combined-efi.img.gz
+#   squashfs-combined-efi.qcow2 / .vmdk (未压缩)
+#   ext4-combined-efi.qcow2.gz / .vmdk.gz
 # 比如斐讯N1刷了armbian系统,armbian系统里安装了PVE虚拟机 可用
 # 比如新款Apple Silicon芯片的苹果电脑里的虚拟机UTM 可用
 # 比如友善NanoPi R3S、R5S 官方推出的预装了PVE的debian系统 可用
@@ -70,7 +74,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set executable permissions
-        run: chmod +x ${{ github.workspace }}/armsr-armv8/build.sh
+        run: |
+          chmod +x ${{ github.workspace }}/armsr-armv8/build.sh
+          chmod +x ${{ github.workspace }}/armsr-armv8/prepare-qemu-images.sh
 
       - name: Save Custom Router IP into OpenWrt files
         run: |
@@ -132,11 +138,18 @@ jobs:
               immortalwrt/imagebuilder:armsr-armv8-openwrt-${luci_version} /bin/bash /home/build/immortalwrt/build.sh
           done
 
-      - name: Copy Firmware to workspace
+      - name: Prepare QEMU release images
         run: |
-          cp ${{ github.workspace }}/bin/targets/armsr/armv8/*.qcow2* ${{ github.workspace }} || true
-          cp ${{ github.workspace }}/bin/targets/armsr/armv8/*.vmdk* ${{ github.workspace }} || true
-          ls -lh ${{ github.workspace }}/*.qcow2* ${{ github.workspace }}/*.vmdk* || true
+          ${{ github.workspace }}/armsr-armv8/prepare-qemu-images.sh \
+            "${{ github.workspace }}/bin/targets/armsr/armv8" \
+            "${{ github.workspace }}"
+          echo "==== release images ===="
+          ls -lh \
+            ${{ github.workspace }}/*-squashfs-combined-efi.img.gz \
+            ${{ github.workspace }}/*-squashfs-combined-efi.qcow2 \
+            ${{ github.workspace }}/*-squashfs-combined-efi.vmdk \
+            ${{ github.workspace }}/*-ext4-combined-efi.qcow2.gz \
+            ${{ github.workspace }}/*-ext4-combined-efi.vmdk.gz
 
       - name: Create info
         run: |
@@ -148,6 +161,12 @@ jobs:
           - 🔑 **密码**: 无（首次登录后建议设置）
           - 📦 **分区大小**: ${{ github.event.inputs.rootfs_partsize }} MB
           - 🔖 **版本**: ${{ github.event.inputs.luci_version }}
+          - 💿 **固件文件**:
+            - squashfs-combined-efi.img.gz
+            - squashfs-combined-efi.qcow2
+            - squashfs-combined-efi.vmdk
+            - ext4-combined-efi.qcow2.gz
+            - ext4-combined-efi.vmdk.gz
           EOF
           if [ "${{ github.event.inputs.include_docker }}" == "yes" ]; then
             echo -e "\n#### 默认带 docker" >> ${{ github.workspace }}/qemu-info.md
@@ -162,8 +181,11 @@ jobs:
           name: ImmortWrt-QEMU-armsr-armv8-25.12.x
           body_path: ${{ github.workspace }}/qemu-info.md
           files: |
-            ${{ github.workspace }}/*.qcow2*
-            ${{ github.workspace }}/*.vmdk*
+            ${{ github.workspace }}/*-squashfs-combined-efi.img.gz
+            ${{ github.workspace }}/*-squashfs-combined-efi.qcow2
+            ${{ github.workspace }}/*-squashfs-combined-efi.vmdk
+            ${{ github.workspace }}/*-ext4-combined-efi.qcow2.gz
+            ${{ github.workspace }}/*-ext4-combined-efi.vmdk.gz
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
