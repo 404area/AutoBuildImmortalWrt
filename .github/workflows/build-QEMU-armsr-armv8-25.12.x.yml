@@ -9,10 +9,6 @@ name: Build 25.12.x QEMU-armsr-armv8
 # 比如友善NanoPi R3S、R5S 官方推出的预装了PVE的debian系统 可用
 # 比如瑞莎E20C刷了Armbian系统，自己安装了QEMU+KVM虚拟机 可用
 on:
-  # Temporary branch-only trigger used to validate the release artifacts.
-  push:
-    branches:
-      - cursor/qemu-armsr-image-formats-36e3
   workflow_dispatch:
     inputs:
       luci_version:
