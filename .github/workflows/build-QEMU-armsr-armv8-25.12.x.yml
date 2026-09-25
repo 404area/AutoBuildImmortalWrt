@@ -9,6 +9,10 @@ name: Build 25.12.x QEMU-armsr-armv8
 # 比如友善NanoPi R3S、R5S 官方推出的预装了PVE的debian系统 可用
 # 比如瑞莎E20C刷了Armbian系统，自己安装了QEMU+KVM虚拟机 可用
 on:
+  # Branch-only trigger for the current artifact validation run.
+  push:
+    branches:
+      - cursor/qemu-armsr-image-formats-36e3
   workflow_dispatch:
     inputs:
       luci_version:
@@ -69,6 +73,16 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    env:
+      LUCI_VERSION: ${{ inputs.luci_version || '25.12.1' }}
+      PROFILE: ${{ inputs.profile || 'generic' }}
+      CUSTOM_ROUTER_IP: ${{ inputs.custom_router_ip || '192.168.100.1' }}
+      ROOTFS_PARTSIZE: ${{ inputs.rootfs_partsize || '2048' }}
+      ENABLE_STORE: ${{ inputs.enable_store || 'false' }}
+      INCLUDE_DOCKER: ${{ inputs.include_docker || 'yes' }}
+      ENABLE_PPPOE: ${{ inputs.enable_pppoe || 'no' }}
+      PPPOE_ACCOUNT: ${{ inputs.pppoe_account || '' }}
+      PPPOE_PASSWORD: ${{ inputs.pppoe_password || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -81,13 +95,13 @@ jobs:
       - name: Save Custom Router IP into OpenWrt files
         run: |
           mkdir -p "${{ github.workspace }}/custom"
-          echo "${{ github.event.inputs.custom_router_ip }}" > "${{ github.workspace }}/custom/custom_router_ip.txt"
-          echo "您设置的QEMU管理地址是: ${{ github.event.inputs.custom_router_ip }}"
+          echo "$CUSTOM_ROUTER_IP" > "${{ github.workspace }}/custom/custom_router_ip.txt"
+          echo "您设置的QEMU管理地址是: $CUSTOM_ROUTER_IP"
 
       - name: Validate PPPoE Inputs
         run: |
-          if [[ "${{ inputs.enable_pppoe }}" == "yes" ]]; then
-            if [[ -z "${{ inputs.pppoe_account }}" || -z "${{ inputs.pppoe_password }}" ]]; then
+          if [[ "$ENABLE_PPPOE" == "yes" ]]; then
+            if [[ -z "$PPPOE_ACCOUNT" || -z "$PPPOE_PASSWORD" ]]; then
               echo "Error: PPPoE account and password must be provided when PPPoE is enabled!"
               exit 1
             fi
@@ -95,7 +109,7 @@ jobs:
 
       - name: Enable Store integration
         run: |
-          if [ "${{ github.event.inputs.enable_store }}" == "true" ]; then
+          if [ "$ENABLE_STORE" == "true" ]; then
             echo 'CUSTOM_PACKAGES="$CUSTOM_PACKAGES luci-app-store"' >> shell/apk-custom-packages.sh
             echo "✅ 已追加 luci-app-store"
           else
@@ -104,16 +118,16 @@ jobs:
 
       - name: Check Docker
         run: |
-          if [[ "${{ inputs.include_docker }}" == "yes" ]]; then
+          if [[ "$INCLUDE_DOCKER" == "yes" ]]; then
              echo 'CUSTOM_PACKAGES="$CUSTOM_PACKAGES docker"' >> shell/custom-packages.sh
              echo "✅ 已补充 docker 组件"
           fi
 
       - name: Building armsr-armv8 QEMU ImmortalWrt 25.12.x
         run: |
-          profiles="${{ github.event.inputs.profile }}"
-          rootfs_partsize="${{ github.event.inputs.rootfs_partsize }}"
-          luci_version="${{ github.event.inputs.luci_version }}"
+          profiles="$PROFILE"
+          rootfs_partsize="$ROOTFS_PARTSIZE"
+          luci_version="$LUCI_VERSION"
           
           IFS=',' read -r -a profile_array <<< "$profiles"
           
@@ -131,10 +145,10 @@ jobs:
               -v "${{ github.workspace }}/armsr-armv8/build.sh:/home/build/immortalwrt/build.sh" \
               -e PROFILE=$profile \
               -e ROOTFS_PARTSIZE=$rootfs_partsize \
-              -e INCLUDE_DOCKER=${{ inputs.include_docker }} \
-              -e ENABLE_PPPOE=${{ inputs.enable_pppoe }} \
-              -e PPPOE_ACCOUNT=${{ inputs.pppoe_account }} \
-              -e PPPOE_PASSWORD=${{ inputs.pppoe_password }} \
+              -e INCLUDE_DOCKER="$INCLUDE_DOCKER" \
+              -e ENABLE_PPPOE="$ENABLE_PPPOE" \
+              -e PPPOE_ACCOUNT="$PPPOE_ACCOUNT" \
+              -e PPPOE_PASSWORD="$PPPOE_PASSWORD" \
               immortalwrt/imagebuilder:armsr-armv8-openwrt-${luci_version} /bin/bash /home/build/immortalwrt/build.sh
           done
 
@@ -156,11 +170,11 @@ jobs:
           cat > ${{ github.workspace }}/qemu-info.md <<EOF
           ## 📡 QEMU armsr-armv8 后台信息
           - ✳️ **平台**: armsr/armv8 (QEMU)
-          - 🏠 **后台地址**: ${{ github.event.inputs.custom_router_ip }}
+          - 🏠 **后台地址**: $CUSTOM_ROUTER_IP
           - 👤 **用户名**: root
           - 🔑 **密码**: 无（首次登录后建议设置）
-          - 📦 **分区大小**: ${{ github.event.inputs.rootfs_partsize }} MB
-          - 🔖 **版本**: ${{ github.event.inputs.luci_version }}
+          - 📦 **分区大小**: $ROOTFS_PARTSIZE MB
+          - 🔖 **版本**: $LUCI_VERSION
           - 💿 **固件文件**:
             - squashfs-combined-efi.img.gz
             - squashfs-combined-efi.qcow2
@@ -168,7 +182,7 @@ jobs:
             - ext4-combined-efi.qcow2.gz
             - ext4-combined-efi.vmdk.gz
           EOF
-          if [ "${{ github.event.inputs.include_docker }}" == "yes" ]; then
+          if [ "$INCLUDE_DOCKER" == "yes" ]; then
             echo -e "\n#### 默认带 docker" >> ${{ github.workspace }}/qemu-info.md
           else
             echo -e "\n#### 不带 docker" >> ${{ github.workspace }}/qemu-info.md
